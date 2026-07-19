@@ -1,0 +1,410 @@
+openapi: 3.1.0
+info:
+  title: Marketplace de serviços locais
+  version: 1.0.0
+  description: Contrato do incremento público de descoberta.
+servers:
+  - url: http://localhost:3000/api/v1
+paths:
+  /health/live:
+    get:
+      operationId: getLiveness
+      tags: [health]
+      responses:
+        '200':
+          description: Processo ativo
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HealthEnvelope'
+  /health/ready:
+    get:
+      operationId: getReadiness
+      tags: [health]
+      responses:
+        '200':
+          description: Dependências críticas disponíveis
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HealthEnvelope'
+        '503':
+          $ref: '#/components/responses/ServiceUnavailable'
+  /categories:
+    get:
+      operationId: listCategories
+      tags: [catalog]
+      responses:
+        '200':
+          description: Categorias públicas ativas
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [data, meta]
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Category'
+                  meta:
+                    $ref: '#/components/schemas/Meta'
+  /search/professionals:
+    get:
+      operationId: searchProfessionals
+      tags: [catalog]
+      parameters:
+        - name: q
+          in: query
+          schema:
+            type: string
+            maxLength: 80
+        - name: category
+          in: query
+          schema:
+            type: string
+            pattern: '^[a-z0-9-]+$'
+        - name: city
+          in: query
+          schema:
+            type: string
+            maxLength: 80
+        - name: cursor
+          in: query
+          schema:
+            type: string
+            maxLength: 500
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 24
+            default: 12
+      responses:
+        '200':
+          description: Perfis públicos elegíveis
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [data, meta]
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/ProfessionalCard'
+                  meta:
+                    allOf:
+                      - $ref: '#/components/schemas/Meta'
+                      - type: object
+                        properties:
+                          next_cursor:
+                            type: string
+                          total:
+                            type: integer
+                            minimum: 0
+        '400':
+          $ref: '#/components/responses/ValidationError'
+  /professionals/{slug}:
+    get:
+      operationId: getProfessional
+      tags: [catalog]
+      parameters:
+        - name: slug
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Perfil público
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [data, meta]
+                properties:
+                  data:
+                    $ref: '#/components/schemas/ProfessionalProfile'
+                  meta:
+                    $ref: '#/components/schemas/Meta'
+        '404':
+          $ref: '#/components/responses/NotFound'
+  /intents:
+    post:
+      operationId: createRestrictedIntent
+      tags: [intents]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [professionalId, serviceId, action]
+              properties:
+                professionalId:
+                  type: string
+                  format: uuid
+                serviceId:
+                  type: string
+                  format: uuid
+                action:
+                  type: string
+                  const: REQUEST_QUOTE
+      responses:
+        '201':
+          description: Intenção opaca válida por 30 minutos
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [data, meta]
+                properties:
+                  data:
+                    $ref: '#/components/schemas/RestrictedIntent'
+                  meta:
+                    $ref: '#/components/schemas/Meta'
+        '400':
+          $ref: '#/components/responses/ValidationError'
+        '404':
+          $ref: '#/components/responses/NotFound'
+components:
+  responses:
+    ValidationError:
+      description: Entrada inválida
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorEnvelope'
+    NotFound:
+      description: Recurso inexistente ou não visível
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorEnvelope'
+    ServiceUnavailable:
+      description: Dependência temporariamente indisponível
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorEnvelope'
+  schemas:
+    Meta:
+      type: object
+      required: [correlation_id]
+      properties:
+        correlation_id:
+          type: string
+          format: uuid
+    HealthEnvelope:
+      type: object
+      required: [data, meta]
+      properties:
+        data:
+          type: object
+          required: [status]
+          properties:
+            status:
+              type: string
+              enum: [ok, ready]
+        meta:
+          $ref: '#/components/schemas/Meta'
+    Money:
+      type: object
+      required: [amountMinor, currency]
+      properties:
+        amountMinor:
+          type: integer
+          minimum: 0
+        currency:
+          type: string
+          const: BRL
+    Category:
+      type: object
+      required: [id, slug, name, description, iconKey, availableProfessionals]
+      properties:
+        id:
+          type: string
+          format: uuid
+        slug:
+          type: string
+        name:
+          type: string
+        description:
+          type: string
+        iconKey:
+          type: string
+        availableProfessionals:
+          type: integer
+          minimum: 0
+    VerificationBadge:
+      type: object
+      required: [code, label]
+      properties:
+        code:
+          type: string
+          enum: [IDENTITY_CONFIRMED, PHONE_CONFIRMED, PAYOUT_ACCOUNT_CONFIRMED]
+        label:
+          type: string
+    Service:
+      type: object
+      required: [id, slug, name, category, pricing, modalities, durationMinutes, summary]
+      properties:
+        id:
+          type: string
+          format: uuid
+        slug:
+          type: string
+        name:
+          type: string
+        category:
+          type: object
+          required: [slug, name]
+          properties:
+            slug:
+              type: string
+            name:
+              type: string
+        pricing:
+          type: object
+          required: [model, from, unitLabel]
+          properties:
+            model:
+              type: string
+              enum: [FIXED, HOURLY, DAILY, STARTING_AT, CUSTOM_QUOTE]
+            from:
+              oneOf:
+                - $ref: '#/components/schemas/Money'
+                - type: 'null'
+            unitLabel:
+              type: string
+        modalities:
+          type: array
+          minItems: 1
+          items:
+            type: string
+            enum: [AT_CLIENT, AT_PROFESSIONAL, REMOTE]
+        durationMinutes:
+          type: [integer, 'null']
+          minimum: 1
+        summary:
+          type: string
+    ProfessionalCard:
+      type: object
+      required:
+        - id
+        - slug
+        - displayName
+        - initials
+        - headline
+        - regionLabel
+        - rating
+        - completedServices
+        - responseTimeLabel
+        - availabilityLabel
+        - badges
+        - primaryService
+      properties:
+        id:
+          type: string
+          format: uuid
+        slug:
+          type: string
+        displayName:
+          type: string
+        initials:
+          type: string
+        headline:
+          type: string
+        regionLabel:
+          type: string
+        rating:
+          type: object
+          required: [average, count]
+          properties:
+            average:
+              type: [number, 'null']
+              minimum: 1
+              maximum: 5
+            count:
+              type: integer
+              minimum: 0
+        completedServices:
+          type: integer
+          minimum: 0
+        responseTimeLabel:
+          type: string
+        availabilityLabel:
+          type: string
+        badges:
+          type: array
+          items:
+            $ref: '#/components/schemas/VerificationBadge'
+        primaryService:
+          $ref: '#/components/schemas/Service'
+    ProfessionalProfile:
+      allOf:
+        - $ref: '#/components/schemas/ProfessionalCard'
+        - type: object
+          required: [bio, serviceAreas, services, policies]
+          properties:
+            bio:
+              type: string
+            serviceAreas:
+              type: array
+              items:
+                type: string
+            services:
+              type: array
+              minItems: 1
+              items:
+                $ref: '#/components/schemas/Service'
+            policies:
+              type: object
+              required: [cancellation, guarantee]
+              properties:
+                cancellation:
+                  type: string
+                guarantee:
+                  type: [string, 'null']
+    RestrictedIntent:
+      type: object
+      required: [id, action, expiresAt]
+      properties:
+        id:
+          type: string
+          format: uuid
+        action:
+          type: string
+          const: REQUEST_QUOTE
+        expiresAt:
+          type: string
+          format: date-time
+    ErrorEnvelope:
+      type: object
+      required: [error, meta]
+      properties:
+        error:
+          type: object
+          required: [code, message, retryable]
+          properties:
+            code:
+              type: string
+            message:
+              type: string
+            retryable:
+              type: boolean
+            fields:
+              type: array
+              items:
+                type: object
+                required: [field, code]
+                properties:
+                  field:
+                    type: string
+                  code:
+                    type: string
+        meta:
+          $ref: '#/components/schemas/Meta'

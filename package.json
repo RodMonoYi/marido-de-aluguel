@@ -1,0 +1,48 @@
+{
+  "name": "marido-de-aluguel",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Marketplace brasileiro de serviços locais",
+  "packageManager": "npm@11.16.0",
+  "engines": {
+    "node": ">=24 <25"
+  },
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ],
+  "overrides": {
+    "next": {
+      "postcss": "$postcss"
+    }
+  },
+  "scripts": {
+    "dev": "npm run build -w @marido/contracts && concurrently --kill-others --names contracts,api,web --prefix-colors cyan,green,yellow \"npm run dev -w @marido/contracts\" \"npm run dev -w @marido/api\" \"npm run dev -w @marido/web\"",
+    "dev:api": "npm run build -w @marido/contracts && npm run dev -w @marido/api",
+    "dev:web": "npm run build -w @marido/contracts && npm run dev -w @marido/web",
+    "build": "npm run build -w @marido/contracts && npm run build -w @marido/api && npm run build -w @marido/web",
+    "typecheck": "npm run build -w @marido/contracts && npm run typecheck -w @marido/api && npm run typecheck -w @marido/web",
+    "lint": "eslint .",
+    "format": "prettier --write .",
+    "format:check": "prettier --check .",
+    "test": "npm run build -w @marido/contracts && npm run test -w @marido/contracts && npm run test -w @marido/api && npm run test -w @marido/web",
+    "check": "npm run format:check && npm run lint && npm run typecheck && npm run test && npm run build",
+    "db:up": "docker compose up -d db",
+    "db:down": "docker compose down",
+    "db:migrate": "npm run db:migrate -w @marido/api",
+    "db:seed": "npm run db:seed -w @marido/api"
+  },
+  "devDependencies": {
+    "@eslint/js": "^10.0.1",
+    "@next/eslint-plugin-next": "^16.2.10",
+    "@vitest/coverage-v8": "^4.1.10",
+    "concurrently": "^10.0.3",
+    "eslint": "^10.7.0",
+    "globals": "^17.7.0",
+    "postcss": "^8.5.19",
+    "prettier": "^3.9.5",
+    "typescript": "^6.0.3",
+    "typescript-eslint": "^8.64.0",
+    "vitest": "^4.1.10"
+  }
+}
