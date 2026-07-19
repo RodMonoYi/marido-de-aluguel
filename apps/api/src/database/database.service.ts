@@ -1,6 +1,15 @@
 import { Injectable, type OnApplicationShutdown } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import { Pool, type QueryResult, type QueryResultRow } from 'pg';
+import { Pool, type PoolClient, type QueryResult, type QueryResultRow } from 'pg';
+
+export interface QueryExecutor {
+  query<Row extends QueryResultRow>(
+    text: string,
+    values?: readonly unknown[],
+  ): Promise<QueryResult<Row>>;
+}
+
+export type TransactionIsolation = 'READ COMMITTED' | 'REPEATABLE READ' | 'SERIALIZABLE';
 
 @Injectable()
 export class DatabaseService implements OnApplicationShutdown {
@@ -23,6 +32,25 @@ export class DatabaseService implements OnApplicationShutdown {
     return this.pool.query<Row>(text, [...values]);
   }
 
+  async transaction<T>(
+    callback: (executor: QueryExecutor) => Promise<T>,
+    isolation: TransactionIsolation = 'READ COMMITTED',
+  ): Promise<T> {
+    const client = await this.pool.connect();
+
+    try {
+      await client.query(`BEGIN ISOLATION LEVEL ${isolation}`);
+      const result = await callback(this.executor(client));
+      await client.query('COMMIT');
+      return result;
+    } catch (error) {
+      await client.query('ROLLBACK').catch(() => undefined);
+      throw error;
+    } finally {
+      client.release();
+    }
+  }
+
   async isReady(): Promise<boolean> {
     try {
       await this.pool.query('SELECT 1');
@@ -34,5 +62,14 @@ export class DatabaseService implements OnApplicationShutdown {
 
   async onApplicationShutdown(): Promise<void> {
     await this.pool.end();
+  }
+
+  private executor(client: PoolClient): QueryExecutor {
+    return {
+      query: <Row extends QueryResultRow>(
+        text: string,
+        values: readonly unknown[] = [],
+      ): Promise<QueryResult<Row>> => client.query<Row>(text, [...values]),
+    };
   }
 }

@@ -1,8 +1,12 @@
 openapi: 3.1.0
 info:
   title: Marketplace de serviços locais
-  version: 1.0.0
-  description: Contrato do incremento público de descoberta.
+  version: 1.3.0
+  description: >-
+    Contrato da descoberta pública e do fluxo demonstrativo privado de pedido,
+    proposta versionada e contrato aguardando pagamento. A identidade
+    demonstrativa é proibida em produção e nenhuma rota deste incremento captura
+    pagamento ou cria lançamento contábil.
 servers:
   - url: http://localhost:3000/api/v1
 paths:
@@ -170,7 +174,373 @@ paths:
           $ref: '#/components/responses/ValidationError'
         '404':
           $ref: '#/components/responses/NotFound'
+  /demo/actors:
+    get:
+      operationId: listDemoActors
+      tags: [development]
+      summary: Lista identidades exclusivamente sintéticas
+      description: Esta operação não existe quando a aplicação executa em produção.
+      responses:
+        '200':
+          description: Atores sintéticos disponíveis para a demonstração
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DemoActorsEnvelope'
+        '404':
+          $ref: '#/components/responses/NotFound'
+  /service-requests:
+    post:
+      operationId: createServiceRequest
+      tags: [marketplace]
+      security:
+        - DemoActor: []
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateServiceRequestInput'
+      responses:
+        '201':
+          description: Pedido privado criado como rascunho
+          headers:
+            ETag:
+              $ref: '#/components/headers/ResourceVersion'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ServiceRequestEnvelope'
+        '400':
+          $ref: '#/components/responses/ValidationError'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+    get:
+      operationId: listServiceRequests
+      tags: [marketplace]
+      security:
+        - DemoActor: []
+      parameters:
+        - name: scope
+          in: query
+          required: true
+          schema:
+            type: string
+            enum: [mine, opportunities]
+      responses:
+        '200':
+          description: Pedidos próprios ou oportunidades sanitizadas conforme o papel
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ServiceRequestsEnvelope'
+        '400':
+          $ref: '#/components/responses/ValidationError'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+  /service-requests/{requestId}:
+    get:
+      operationId: getServiceRequest
+      tags: [marketplace]
+      security:
+        - DemoActor: []
+      parameters:
+        - $ref: '#/components/parameters/RequestId'
+      responses:
+        '200':
+          description: Detalhe permitido ao cliente dono ou profissional elegível
+          headers:
+            ETag:
+              $ref: '#/components/headers/ResourceVersion'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ServiceRequestEnvelope'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+  /service-requests/{requestId}/publish:
+    post:
+      operationId: publishServiceRequest
+      tags: [marketplace]
+      security:
+        - DemoActor: []
+      parameters:
+        - $ref: '#/components/parameters/RequestId'
+        - $ref: '#/components/parameters/IdempotencyKey'
+        - $ref: '#/components/parameters/IfMatch'
+      responses:
+        '200':
+          description: Pedido publicado para profissionais elegíveis
+          headers:
+            ETag:
+              $ref: '#/components/headers/ResourceVersion'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ServiceRequestEnvelope'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+  /service-requests/{requestId}/proposals:
+    get:
+      operationId: listRequestProposals
+      tags: [marketplace]
+      security:
+        - DemoActor: []
+      parameters:
+        - $ref: '#/components/parameters/RequestId'
+      responses:
+        '200':
+          description: Propostas visíveis à parte autorizada
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProposalsEnvelope'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+    post:
+      operationId: createProposal
+      tags: [marketplace]
+      security:
+        - DemoActor: []
+      parameters:
+        - $ref: '#/components/parameters/RequestId'
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ProposalRevisionInput'
+      responses:
+        '201':
+          description: Proposta e primeira revisão imutável criadas
+          headers:
+            ETag:
+              $ref: '#/components/headers/ResourceVersion'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProposalEnvelope'
+        '400':
+          $ref: '#/components/responses/ValidationError'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+  /opportunities:
+    get:
+      operationId: listOpportunities
+      tags: [marketplace]
+      description: >-
+        Alias de leitura para profissionais sintéticos. Retorna somente pedidos
+        publicados, sanitizados e elegíveis por categoria, serviço publicado e
+        área ativa com cidade e UF compatíveis.
+      security:
+        - DemoActor: []
+      responses:
+        '200':
+          description: Oportunidades privadas elegíveis
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ServiceRequestsEnvelope'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+  /proposals/{proposalId}/revisions:
+    get:
+      operationId: listProposalRevisions
+      tags: [marketplace]
+      security:
+        - DemoActor: []
+      parameters:
+        - $ref: '#/components/parameters/ProposalId'
+      responses:
+        '200':
+          description: Histórico append-only visível às partes autorizadas
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProposalRevisionsEnvelope'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+    post:
+      operationId: reviseProposal
+      tags: [marketplace]
+      security:
+        - DemoActor: []
+      parameters:
+        - $ref: '#/components/parameters/ProposalId'
+        - $ref: '#/components/parameters/IdempotencyKey'
+        - $ref: '#/components/parameters/IfMatch'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ProposalRevisionInput'
+      responses:
+        '201':
+          description: Nova revisão anexada sem alterar a anterior
+          headers:
+            ETag:
+              $ref: '#/components/headers/ResourceVersion'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProposalEnvelope'
+        '400':
+          $ref: '#/components/responses/ValidationError'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+  /proposals/{proposalId}/accept:
+    post:
+      operationId: acceptProposal
+      tags: [marketplace]
+      security:
+        - DemoActor: []
+      parameters:
+        - $ref: '#/components/parameters/ProposalId'
+        - $ref: '#/components/parameters/IdempotencyKey'
+        - $ref: '#/components/parameters/IfMatch'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AcceptProposalInput'
+      responses:
+        '200':
+          description: >-
+            Aceite atômico; contrato e ordem continuam aguardando pagamento e o
+            hold não representa booking confirmado
+          headers:
+            ETag:
+              $ref: '#/components/headers/ResourceVersion'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProposalAcceptanceEnvelope'
+        '400':
+          $ref: '#/components/responses/ValidationError'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+  /contracts/{contractId}:
+    get:
+      operationId: getContract
+      tags: [contracting]
+      security:
+        - DemoActor: []
+      parameters:
+        - $ref: '#/components/parameters/ContractId'
+      responses:
+        '200':
+          description: Snapshot imutável e estados financeiro e de agenda separados
+          headers:
+            ETag:
+              $ref: '#/components/headers/ResourceVersion'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProposalAcceptanceEnvelope'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
 components:
+  securitySchemes:
+    DemoActor:
+      type: apiKey
+      in: header
+      name: X-Demo-Actor-Id
+      description: >-
+        Identificador de ator sintético, resolvido no servidor. Este esquema é
+        proibido em produção e não representa autenticação real.
+  headers:
+    ResourceVersion:
+      description: Versão forte do agregado para uso posterior em If-Match.
+      schema:
+        type: string
+        pattern: '^"[1-9][0-9]*"$'
+        example: '"2"'
+  parameters:
+    IdempotencyKey:
+      name: Idempotency-Key
+      in: header
+      required: true
+      schema:
+        type: string
+        minLength: 16
+        maxLength: 128
+      description: >-
+        Chave opaca única por ator, operação e corpo da requisição. O resultado
+        fica disponível para replay por 24 horas; clientes não devem reutilizar
+        deliberadamente a chave depois desse prazo.
+    IfMatch:
+      name: If-Match
+      in: header
+      required: true
+      schema:
+        type: string
+        pattern: '^"[1-9][0-9]*"$'
+        example: '"2"'
+      description: Versão otimista atual do agregado.
+    RequestId:
+      name: requestId
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+    ProposalId:
+      name: proposalId
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+    ContractId:
+      name: contractId
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
   responses:
     ValidationError:
       description: Entrada inválida
@@ -186,6 +556,30 @@ components:
             $ref: '#/components/schemas/ErrorEnvelope'
     ServiceUnavailable:
       description: Dependência temporariamente indisponível
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorEnvelope'
+    Unauthorized:
+      description: Ator ausente ou identidade demonstrativa indisponível
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorEnvelope'
+    Forbidden:
+      description: O papel autenticado não pode executar a operação
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorEnvelope'
+    Conflict:
+      description: Conflito de versão, idempotência, agenda ou estado
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorEnvelope'
+    Unprocessable:
+      description: Regra de negócio não satisfeita
       content:
         application/json:
           schema:
@@ -218,6 +612,7 @@ components:
         amountMinor:
           type: integer
           minimum: 0
+          maximum: 9007199254740991
         currency:
           type: string
           const: BRL
@@ -382,6 +777,677 @@ components:
         expiresAt:
           type: string
           format: date-time
+    DemoActor:
+      oneOf:
+        - type: object
+          additionalProperties: false
+          required: [id, role, displayName, professionalId]
+          properties:
+            id:
+              type: string
+              format: uuid
+            role:
+              type: string
+              const: CLIENT
+            displayName:
+              type: string
+              minLength: 1
+            professionalId:
+              type: 'null'
+        - type: object
+          additionalProperties: false
+          required: [id, role, displayName, professionalId]
+          properties:
+            id:
+              type: string
+              format: uuid
+            role:
+              type: string
+              const: PROFESSIONAL
+            displayName:
+              type: string
+              minLength: 1
+            professionalId:
+              type: string
+              format: uuid
+    ApproximateLocation:
+      type: object
+      additionalProperties: false
+      required: [city, state]
+      properties:
+        city:
+          type: string
+          minLength: 2
+          maxLength: 80
+        state:
+          type: string
+          pattern: '^[A-Z]{2}$'
+        district:
+          type: [string, 'null']
+          minLength: 2
+          maxLength: 80
+    DesiredWindow:
+      type: object
+      additionalProperties: false
+      required: [startsAt, endsAt, timezone]
+      properties:
+        startsAt:
+          type: string
+          format: date-time
+        endsAt:
+          type: string
+          format: date-time
+        timezone:
+          type: string
+          minLength: 1
+          maxLength: 80
+          example: America/Bahia
+    RequestBudget:
+      type: object
+      additionalProperties: false
+      required: [currency]
+      properties:
+        minMinor:
+          type: [integer, 'null']
+          minimum: 0
+          maximum: 9007199254740991
+        maxMinor:
+          type: [integer, 'null']
+          minimum: 0
+          maximum: 9007199254740991
+        currency:
+          type: string
+          const: BRL
+    CreateServiceRequestInput:
+      type: object
+      additionalProperties: false
+      required:
+        - categoryId
+        - title
+        - description
+        - locationApprox
+        - desiredWindow
+        - urgency
+        - visibility
+        - proposalDeadline
+      properties:
+        categoryId:
+          type: string
+          format: uuid
+          description: >-
+            Referência provisória à categoria do piloto. Será substituída por
+            subcategoryId quando a taxonomia versionada for implementada.
+        title:
+          type: string
+          minLength: 10
+          maxLength: 120
+        description:
+          type: string
+          minLength: 20
+          maxLength: 2000
+        locationApprox:
+          $ref: '#/components/schemas/ApproximateLocation'
+        desiredWindow:
+          $ref: '#/components/schemas/DesiredWindow'
+        urgency:
+          type: string
+          enum: [FLEXIBLE, WITHIN_7_DAYS, URGENT]
+        budget:
+          oneOf:
+            - $ref: '#/components/schemas/RequestBudget'
+            - type: 'null'
+        visibility:
+          type: string
+          const: PRIVATE_MATCHED
+        proposalDeadline:
+          type: string
+          format: date-time
+    ServiceRequest:
+      type: object
+      required:
+        - id
+        - title
+        - description
+        - category
+        - locationApprox
+        - desiredWindow
+        - urgency
+        - budget
+        - visibility
+        - status
+        - version
+        - proposalDeadline
+        - proposalCount
+        - createdAt
+        - publishedAt
+      properties:
+        id:
+          type: string
+          format: uuid
+        title:
+          type: string
+        description:
+          type: string
+        category:
+          type: object
+          required: [id, slug, name]
+          properties:
+            id:
+              type: string
+              format: uuid
+            slug:
+              type: string
+            name:
+              type: string
+        locationApprox:
+          $ref: '#/components/schemas/ApproximateLocation'
+        desiredWindow:
+          $ref: '#/components/schemas/DesiredWindow'
+        urgency:
+          type: string
+          enum: [FLEXIBLE, WITHIN_7_DAYS, URGENT]
+        budget:
+          oneOf:
+            - $ref: '#/components/schemas/RequestBudget'
+            - type: 'null'
+        visibility:
+          type: string
+          const: PRIVATE_MATCHED
+        status:
+          type: string
+          enum: [DRAFT, PUBLISHED, CONVERTED, CANCELLED, EXPIRED]
+        version:
+          type: integer
+          minimum: 1
+        proposalDeadline:
+          type: string
+          format: date-time
+        proposalCount:
+          type: integer
+          minimum: 0
+        createdAt:
+          type: string
+          format: date-time
+        publishedAt:
+          type: [string, 'null']
+          format: date-time
+    ProposalRevisionInput:
+      type: object
+      additionalProperties: false
+      required: [scope, included, excluded, amounts, schedule, validUntil, guaranteeOffer]
+      properties:
+        scope:
+          type: string
+          minLength: 20
+          maxLength: 4000
+        included:
+          type: array
+          minItems: 1
+          maxItems: 20
+          items:
+            type: string
+            minLength: 2
+            maxLength: 240
+        excluded:
+          type: array
+          maxItems: 20
+          items:
+            type: string
+            minLength: 2
+            maxLength: 240
+        amounts:
+          type: object
+          additionalProperties: false
+          required: [laborMinor, materialsMinor, travelMinor, currency]
+          properties:
+            laborMinor:
+              type: integer
+              minimum: 0
+              maximum: 9007199254740991
+            materialsMinor:
+              type: integer
+              minimum: 0
+              maximum: 9007199254740991
+            travelMinor:
+              type: integer
+              minimum: 0
+              maximum: 9007199254740991
+            currency:
+              type: string
+              const: BRL
+        schedule:
+          $ref: '#/components/schemas/DesiredWindow'
+        validUntil:
+          type: string
+          format: date-time
+        guaranteeOffer:
+          type: [string, 'null']
+          minLength: 10
+          maxLength: 1000
+    ProposalBreakdown:
+      type: object
+      required:
+        - laborMinor
+        - materialsMinor
+        - travelMinor
+        - customerPlatformFeeMinor
+        - professionalCommissionMinor
+        - customerTotalMinor
+        - professionalNetEstimateMinor
+        - currency
+        - policy
+      properties:
+        laborMinor:
+          type: integer
+          minimum: 0
+          maximum: 9007199254740991
+        materialsMinor:
+          type: integer
+          minimum: 0
+          maximum: 9007199254740991
+        travelMinor:
+          type: integer
+          minimum: 0
+          maximum: 9007199254740991
+        customerPlatformFeeMinor:
+          type: integer
+          minimum: 0
+          maximum: 9007199254740991
+        professionalCommissionMinor:
+          type: integer
+          minimum: 0
+          maximum: 9007199254740991
+        customerTotalMinor:
+          type: integer
+          minimum: 0
+          maximum: 9007199254740991
+        professionalNetEstimateMinor:
+          type: integer
+          minimum: 0
+          maximum: 9007199254740991
+        currency:
+          type: string
+          const: BRL
+        policy:
+          type: object
+          required: [code, version, developmentOnly]
+          properties:
+            code:
+              type: string
+            version:
+              type: integer
+              minimum: 1
+            developmentOnly:
+              type: boolean
+    ProposalRevision:
+      type: object
+      required:
+        - id
+        - version
+        - scope
+        - included
+        - excluded
+        - breakdown
+        - schedule
+        - validUntil
+        - policies
+        - createdAt
+      properties:
+        id:
+          type: string
+          format: uuid
+        version:
+          type: integer
+          minimum: 1
+        scope:
+          type: string
+        included:
+          type: array
+          items:
+            type: string
+        excluded:
+          type: array
+          items:
+            type: string
+        breakdown:
+          $ref: '#/components/schemas/ProposalBreakdown'
+        schedule:
+          $ref: '#/components/schemas/DesiredWindow'
+        validUntil:
+          type: string
+          format: date-time
+        policies:
+          type: object
+          required: [cancellation, guarantee]
+          properties:
+            cancellation:
+              type: object
+              required: [code, version, label]
+              properties:
+                code:
+                  type: string
+                version:
+                  type: integer
+                  minimum: 1
+                label:
+                  type: string
+            guarantee:
+              oneOf:
+                - type: object
+                  required: [offeredBy, text]
+                  properties:
+                    offeredBy:
+                      type: string
+                      const: PROFESSIONAL
+                    text:
+                      type: string
+                - type: 'null'
+        createdAt:
+          type: string
+          format: date-time
+    Proposal:
+      type: object
+      required:
+        - id
+        - requestId
+        - professional
+        - status
+        - version
+        - currentRevision
+        - createdAt
+        - updatedAt
+      properties:
+        id:
+          type: string
+          format: uuid
+        requestId:
+          type: string
+          format: uuid
+        professional:
+          type: object
+          required: [id, slug, displayName]
+          properties:
+            id:
+              type: string
+              format: uuid
+            slug:
+              type: string
+            displayName:
+              type: string
+        status:
+          type: string
+          enum: [SENT, VIEWED, NEGOTIATING, REVISED, CONVERTED, REJECTED, EXPIRED, CANCELLED]
+        version:
+          type: integer
+          minimum: 1
+        currentRevision:
+          $ref: '#/components/schemas/ProposalRevision'
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+    AcceptProposalInput:
+      type: object
+      additionalProperties: false
+      required: [revisionId, acceptanceTextVersion]
+      properties:
+        revisionId:
+          type: string
+          format: uuid
+        acceptanceTextVersion:
+          type: string
+          const: DEMO-CONTRACT-PTBR-1
+    ContractSnapshot:
+      type: object
+      required: [request, parties, proposal, acceptance]
+      properties:
+        request:
+          type: object
+          required:
+            - id
+            - version
+            - title
+            - description
+            - category
+            - locationApprox
+            - desiredWindow
+            - urgency
+            - budget
+          properties:
+            id:
+              type: string
+              format: uuid
+            version:
+              type: integer
+              minimum: 1
+            title:
+              type: string
+            description:
+              type: string
+            category:
+              type: object
+              required: [id, slug, name]
+              properties:
+                id:
+                  type: string
+                  format: uuid
+                slug:
+                  type: string
+                name:
+                  type: string
+            locationApprox:
+              $ref: '#/components/schemas/ApproximateLocation'
+            desiredWindow:
+              $ref: '#/components/schemas/DesiredWindow'
+            urgency:
+              type: string
+              enum: [FLEXIBLE, WITHIN_7_DAYS, URGENT]
+            budget:
+              oneOf:
+                - $ref: '#/components/schemas/RequestBudget'
+                - type: 'null'
+        parties:
+          type: object
+          required: [customerActorId, professionalActorId, professionalProfileId]
+          properties:
+            customerActorId:
+              type: string
+              format: uuid
+            professionalActorId:
+              type: string
+              format: uuid
+            professionalProfileId:
+              type: string
+              format: uuid
+        proposal:
+          type: object
+          required: [id, version, revision]
+          properties:
+            id:
+              type: string
+              format: uuid
+            version:
+              type: integer
+              minimum: 1
+            revision:
+              $ref: '#/components/schemas/ProposalRevision'
+        acceptance:
+          type: object
+          required: [textVersion, text, textHash, acceptedAt]
+          properties:
+            textVersion:
+              type: string
+              const: DEMO-CONTRACT-PTBR-1
+            text:
+              type: string
+              const: 'Declaro que li e aceito o escopo, os itens incluídos e excluídos, a composição do preço, a agenda, a política de cancelamento e a garantia da revisão selecionada. Entendo que este aceite cria um contrato aguardando pagamento, sem realizar cobrança nem confirmar a reserva do serviço.'
+            textHash:
+              type: string
+              const: 4b248e93828ef5204ffc74e98d3b5ea87dcd1f9a2175f87f4406430de5f2b3c3
+            acceptedAt:
+              type: string
+              format: date-time
+    Contract:
+      type: object
+      required:
+        - id
+        - requestId
+        - proposalId
+        - acceptedRevisionId
+        - status
+        - version
+        - snapshotHash
+        - acceptanceTextVersion
+        - acceptedAt
+        - snapshot
+      properties:
+        id:
+          type: string
+          format: uuid
+        requestId:
+          type: string
+          format: uuid
+        proposalId:
+          type: string
+          format: uuid
+        acceptedRevisionId:
+          type: string
+          format: uuid
+        status:
+          type: string
+          enum: [AWAITING_PAYMENT, CANCELLED]
+        version:
+          type: integer
+          minimum: 1
+        snapshotHash:
+          type: string
+          pattern: '^[0-9a-f]{64}$'
+        acceptanceTextVersion:
+          type: string
+          const: DEMO-CONTRACT-PTBR-1
+        acceptedAt:
+          type: string
+          format: date-time
+        snapshot:
+          $ref: '#/components/schemas/ContractSnapshot'
+    PaymentOrder:
+      type: object
+      required: [id, contractId, status, amount, checkoutAvailable, createdAt]
+      properties:
+        id:
+          type: string
+          format: uuid
+        contractId:
+          type: string
+          format: uuid
+        status:
+          type: string
+          enum: [AWAITING_PAYMENT, EXPIRED, CANCELLED]
+        amount:
+          $ref: '#/components/schemas/Money'
+        checkoutAvailable:
+          type: boolean
+          const: false
+        createdAt:
+          type: string
+          format: date-time
+    BookingHold:
+      type: object
+      required: [id, contractId, status, schedule, expiresAt, createdAt]
+      properties:
+        id:
+          type: string
+          format: uuid
+        contractId:
+          type: string
+          format: uuid
+        status:
+          type: string
+          enum: [HOLD_ACTIVE, HOLD_EXPIRED, HOLD_RELEASED]
+        schedule:
+          $ref: '#/components/schemas/DesiredWindow'
+        expiresAt:
+          type: string
+          format: date-time
+        createdAt:
+          type: string
+          format: date-time
+    ProposalAcceptance:
+      type: object
+      required: [contract, paymentOrder, bookingHold]
+      properties:
+        contract:
+          $ref: '#/components/schemas/Contract'
+        paymentOrder:
+          $ref: '#/components/schemas/PaymentOrder'
+        bookingHold:
+          $ref: '#/components/schemas/BookingHold'
+    DemoActorsEnvelope:
+      type: object
+      required: [data, meta]
+      properties:
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/DemoActor'
+        meta:
+          $ref: '#/components/schemas/Meta'
+    ServiceRequestEnvelope:
+      type: object
+      required: [data, meta]
+      properties:
+        data:
+          $ref: '#/components/schemas/ServiceRequest'
+        meta:
+          $ref: '#/components/schemas/Meta'
+    ServiceRequestsEnvelope:
+      type: object
+      required: [data, meta]
+      properties:
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/ServiceRequest'
+        meta:
+          $ref: '#/components/schemas/Meta'
+    ProposalEnvelope:
+      type: object
+      required: [data, meta]
+      properties:
+        data:
+          $ref: '#/components/schemas/Proposal'
+        meta:
+          $ref: '#/components/schemas/Meta'
+    ProposalsEnvelope:
+      type: object
+      required: [data, meta]
+      properties:
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/Proposal'
+        meta:
+          $ref: '#/components/schemas/Meta'
+    ProposalRevisionsEnvelope:
+      type: object
+      required: [data, meta]
+      properties:
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/ProposalRevision'
+        meta:
+          $ref: '#/components/schemas/Meta'
+    ProposalAcceptanceEnvelope:
+      type: object
+      required: [data, meta]
+      properties:
+        data:
+          $ref: '#/components/schemas/ProposalAcceptance'
+        meta:
+          $ref: '#/components/schemas/Meta'
     ErrorEnvelope:
       type: object
       required: [error, meta]

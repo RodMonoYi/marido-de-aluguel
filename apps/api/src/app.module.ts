@@ -7,6 +7,8 @@ import { validateEnvironment } from './config/environment';
 import { DatabaseModule } from './database/database.module';
 import { HealthModule } from './health/health.module';
 import { IntentModule } from './intents/intent.module';
+import { IdentityModule } from './identity/identity.module';
+import { MarketplaceModule } from './marketplace/marketplace.module';
 
 @Module({
   imports: [
@@ -19,6 +21,8 @@ import { IntentModule } from './intents/intent.module';
     HealthModule,
     CatalogModule,
     IntentModule,
+    IdentityModule,
+    MarketplaceModule,
   ],
 })
 export class AppModule implements NestModule {

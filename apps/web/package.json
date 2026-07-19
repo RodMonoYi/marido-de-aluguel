@@ -3,7 +3,7 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
-    "dev": "NEXT_TELEMETRY_DISABLED=1 next dev --port 5174",
+    "dev": "DEMO_MODE=true NEXT_TELEMETRY_DISABLED=1 next dev --port 5174",
     "start": "NEXT_TELEMETRY_DISABLED=1 next start --port 5174",
     "build": "NEXT_TELEMETRY_DISABLED=1 next build",
     "typecheck": "tsc --noEmit",

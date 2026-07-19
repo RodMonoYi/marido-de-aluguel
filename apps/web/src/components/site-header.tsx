@@ -1,6 +1,10 @@
 import Link from 'next/link';
 
-export function SiteHeader() {
+import { getDemoActor } from '@/lib/demo-session';
+
+export async function SiteHeader() {
+  const actor = await getDemoActor();
+
   return (
     <header className="site-header">
       <div className="shell header-inner">
@@ -12,13 +16,32 @@ export function SiteHeader() {
         </Link>
         <nav aria-label="Navegação principal" className="primary-nav">
           <Link href="/buscar">Buscar profissionais</Link>
-          <Link href="/entrar">Entrar</Link>
-          <Link
-            className="button button-compact button-outline"
-            href="/entrar?intent=publish-request"
-          >
-            Publicar pedido
-          </Link>
+          {actor ? (
+            <>
+              <Link href={actor.homePath}>
+                {actor.role === 'CLIENT' ? 'Novo pedido' : 'Oportunidades'}
+              </Link>
+              <Link className="demo-actor-link" href="/entrar">
+                <span className="demo-actor-initial" aria-hidden="true">
+                  {actor.displayName.slice(0, 1)}
+                </span>
+                <span>
+                  <small>Perfil demo</small>
+                  {actor.shortName}
+                </span>
+              </Link>
+            </>
+          ) : (
+            <>
+              <Link href="/entrar">Entrar</Link>
+              <Link
+                className="button button-compact button-outline"
+                href="/entrar?returnTo=/pedidos/novo&required=CLIENT"
+              >
+                Publicar pedido
+              </Link>
+            </>
+          )}
         </nav>
       </div>
     </header>

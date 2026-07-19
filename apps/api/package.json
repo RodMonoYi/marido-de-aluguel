@@ -8,6 +8,7 @@
     "build": "nest build",
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "test": "vitest run",
+    "test:integration": "RUN_DATABASE_INTEGRATION=true vitest run",
     "lint": "eslint src test",
     "db:migrate": "tsx src/database/scripts/migrate.ts",
     "db:seed": "tsx src/database/scripts/seed.ts"

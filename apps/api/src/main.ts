@@ -18,8 +18,20 @@ async function bootstrap(): Promise<void> {
     app,
     new DocumentBuilder()
       .setTitle('Marketplace de serviços locais')
-      .setDescription('API pública do primeiro incremento')
-      .setVersion('1.0.0')
+      .setDescription(
+        'Descoberta pública e fluxo privado demonstrativo; nenhuma rota captura pagamento ou cria lançamento contábil.',
+      )
+      .setVersion('1.3.0')
+      .addApiKey(
+        {
+          type: 'apiKey',
+          in: 'header',
+          name: 'X-Demo-Actor-Id',
+          description:
+            'Identificador de ator sintético disponível apenas em desenvolvimento e teste.',
+        },
+        'DemoActor',
+      )
       .build(),
   );
   SwaggerModule.setup('api/docs', app, document, {

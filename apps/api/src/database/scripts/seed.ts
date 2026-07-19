@@ -1,16 +1,16 @@
-import { readFile } from 'node:fs/promises';
+import { readdir, readFile } from 'node:fs/promises';
 import path from 'node:path';
 
 import { config } from 'dotenv';
 import { Client } from 'pg';
 
+import { assertSyntheticSeedAllowed } from './seed-environment';
+
 async function seed(): Promise<void> {
   config({ path: path.resolve(process.cwd(), '../../.env'), quiet: true });
   config({ quiet: true });
 
-  if (process.env.NODE_ENV === 'production') {
-    throw new Error('Development seed is forbidden in production');
-  }
+  assertSyntheticSeedAllowed(process.env);
 
   const connectionString = process.env.DATABASE_URL;
   if (!connectionString) {
@@ -21,17 +21,27 @@ async function seed(): Promise<void> {
   await client.connect();
 
   try {
-    const sql = await readFile(
-      path.resolve(process.cwd(), 'src/database/seeds/development.sql'),
-      'utf8',
-    );
-    await client.query('BEGIN');
-    await client.query(sql);
-    await client.query('COMMIT');
-    process.stdout.write('Synthetic development catalog seeded\n');
-  } catch (error) {
-    await client.query('ROLLBACK').catch(() => undefined);
-    throw error;
+    const directory = path.resolve(process.cwd(), 'src/database/seeds');
+    const seeds = (await readdir(directory))
+      .filter((name) => name.endsWith('.sql'))
+      .sort((left, right) => {
+        if (left === 'development.sql') return -1;
+        if (right === 'development.sql') return 1;
+        return left.localeCompare(right);
+      });
+
+    for (const name of seeds) {
+      const sql = await readFile(path.join(directory, name), 'utf8');
+      await client.query('BEGIN');
+      try {
+        await client.query(sql);
+        await client.query('COMMIT');
+        process.stdout.write(`Applied synthetic seed ${name}\n`);
+      } catch (error) {
+        await client.query('ROLLBACK');
+        throw error;
+      }
+    }
   } finally {
     await client.end();
   }

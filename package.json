@@ -26,6 +26,7 @@
     "format": "prettier --write .",
     "format:check": "prettier --check .",
     "test": "npm run build -w @marido/contracts && npm run test -w @marido/contracts && npm run test -w @marido/api && npm run test -w @marido/web",
+    "test:integration": "npm run build -w @marido/contracts && npm run test:integration -w @marido/api",
     "check": "npm run format:check && npm run lint && npm run typecheck && npm run test && npm run build",
     "db:up": "docker compose up -d db",
     "db:down": "docker compose down",

@@ -19,8 +19,14 @@ export function configureApp(app: INestApplication): void {
     origin: config.getOrThrow<string>('WEB_ORIGIN'),
     credentials: true,
     methods: ['GET', 'POST', 'OPTIONS'],
-    allowedHeaders: ['Content-Type', 'X-Correlation-ID'],
-    exposedHeaders: ['X-Correlation-ID'],
+    allowedHeaders: [
+      'Content-Type',
+      'X-Correlation-ID',
+      'X-Demo-Actor-Id',
+      'Idempotency-Key',
+      'If-Match',
+    ],
+    exposedHeaders: ['X-Correlation-ID', 'ETag'],
     maxAge: 600,
   });
   app.useGlobalPipes(
